@@ -20,7 +20,6 @@ public class RentalCarValidator implements Validator {
     public void validate(Object target, Errors errors) {
         RentalCarRequest request = (RentalCarRequest) target;
 
-        // Check if 'year' is not greater than the current year
         int currentYear = Year.now().getValue();
         try {
             int carYear = Integer.parseInt(request.getYear());
@@ -30,8 +29,14 @@ public class RentalCarValidator implements Validator {
         } catch (NumberFormatException e) {
             errors.rejectValue("year", "field.invalid", "Year must be a valid number.");
         }
+        try {
+            if ( Integer.parseInt(request.getMinDriverLicenseYear()) < 2) {
+                errors.rejectValue("minDriverLicenseYear", "field.invalid", "Driver License Year must be greater than 2.");
+            }
+        } catch (NumberFormatException e) {
+            errors.rejectValue("year", "field.invalid", "Driver License Year must be a valid number.");
+        }
 
-        // Other field validations
         ValidationUtils.rejectIfEmptyOrWhitespace(errors, "dailyRentingPrice", "field.required", "Daily renting price is required.");
         ValidationUtils.rejectIfEmptyOrWhitespace(errors, "status", "field.required", "Car status is required.");
         ValidationUtils.rejectIfEmptyOrWhitespace(errors, "location", "field.required", "Car location is required.");
