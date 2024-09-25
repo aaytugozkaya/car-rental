@@ -33,43 +33,39 @@ public class TransactionService {
     private final UserRepository userRepository;
     private static final Logger logger = LogManager.getLogger(TransactionService.class);
 
-    // Get all transactions
     public List<TransactionResponse> getTransactions() {
-        return transactionRepository.findAll().stream()
+        return transactionRepository.findAll()
+                .stream()
                 .map(transactionMapper::toTransactionResponse)
                 .collect(Collectors.toList());
     }
 
-    // Get a single transaction by ID
     public TransactionResponse getTransactionById(UUID id) {
-        return transactionMapper.toTransactionResponse(transactionRepository.findById(id)
-                .orElseThrow(() -> new TransactionNotFoundException("Transaction not found")));
+        return transactionRepository.findById(id)
+                .map(transactionMapper::toTransactionResponse)
+                .orElseThrow(() -> new TransactionNotFoundException("Transaction not found"));
     }
 
-
     public TransactionResponse saveTransaction(TransactionRequest transactionRequest) {
+        validateDates(transactionRequest.getStartDate(), transactionRequest.getReturnDate());
 
-        if (!transactionRequest.getStartDate().isAfter(transactionRequest.getReturnDate())) {
-            RentalCar rentalCar = rentalCarRepository.findById(transactionRequest.getRentalCarId())
-                    .orElseThrow(() -> new CarNotFoundException("Rental car not found - SaveTransaction"));
-            if (!transactionRepository.isCarRented(transactionRequest.getRentalCarId(), transactionRequest.getStartDate(), transactionRequest.getReturnDate(), Status.ACTIVE) && rentalCar.getStatus().equals(CarStatus.AVAILABLE)) {
-                Transaction transaction = transactionMapper.toTransaction(transactionRequest);
-                User user = userRepository.findById(transactionRequest.getUserId())
-                        .orElseThrow(() -> new UserNotFoundException("User not found - SaveTransaction"));
-                if(user.getBalance().compareTo(transaction.getTotalPrice()) != 1) {
-                    throw new BalanceIsNotEnoughException("Not enough balance");
-                }
-                user.setBalance(user.getBalance().subtract(transaction.getTotalPrice()));
-                logger.info("User balance updated after transaction: " + user.getBalance());
-                logger.info("Transaction saved with id: " + transaction.getId());
-                userRepository.save(user);
-                return transactionMapper.toTransactionResponse(transactionRepository.save(transaction));
-            } else {
-                throw new CarIsAlreadyRentedException("Car is already rented for this date range");
-            }
-        } else {
-            throw new ReturnDateIsNotValidException("Return date must be after start date");
+        RentalCar rentalCar = findAvailableRentalCar(transactionRequest.getRentalCarId());
+        checkCarAvailability(transactionRequest, rentalCar);
+
+        Transaction transaction = transactionMapper.toTransaction(transactionRequest);
+        User user = findUser(transactionRequest.getUserId());
+
+        if (user.getBalance().compareTo(transaction.getTotalPrice()) < 0) {
+            throw new BalanceIsNotEnoughException("Not enough balance");
         }
+
+        user.setBalance(user.getBalance().subtract(transaction.getTotalPrice()));
+        userRepository.save(user);
+
+        logger.info("User balance updated after transaction: {}", user.getBalance());
+        logger.info("Transaction saved with id: {}", transaction.getId());
+
+        return transactionMapper.toTransactionResponse(transactionRepository.save(transaction));
     }
 
     public TransactionResponse updateTransaction(UUID id, TransactionRequest transactionRequest) {
@@ -86,106 +82,127 @@ public class TransactionService {
             }
 
             List<UUID> overlappingTransactions = transactionRepository.findOverlappingTransaction(
-                    transactionRequest.getRentalCarId(),
-                    transactionRequest.getStartDate(),
-                    transactionRequest.getReturnDate(),
-                    Status.ACTIVE
-            );
-
-            overlappingTransactions.remove(id);
+                            transactionRequest.getRentalCarId(),
+                            transactionRequest.getStartDate(),
+                            transactionRequest.getReturnDate(),
+                            Status.ACTIVE
+                    ).stream()
+                    .filter(tId -> !tId.equals(existingTransaction.getId()))
+                    .collect(Collectors.toList());
 
             if (!overlappingTransactions.isEmpty()) {
                 throw new CarIsAlreadyRentedException("Car is already rented for this date range");
             }
         }
+
         RentalCar rentalCar = rentalCarRepository.findById(transactionRequest.getRentalCarId())
                 .orElseThrow(() -> new CarNotFoundException("Rental car not found - SaveTransaction"));
-        if(rentalCar.getStatus().equals(CarStatus.AVAILABLE)){
-            updateTransactionDetails(existingTransaction, transactionRequest,rentalCar);
+
+        if (rentalCar.getStatus().equals(CarStatus.AVAILABLE)) {
+            updateTransactionDetails(existingTransaction, transactionRequest, rentalCar);
         }
-
-
 
         return transactionMapper.toTransactionResponse(transactionRepository.save(existingTransaction));
     }
 
-    private void updateTransactionDetails(Transaction transaction, TransactionRequest transactionRequest,RentalCar rentalCar) {
-        Long daysBetweenOldTransaction = (ChronoUnit.DAYS.between(transaction.getStartDate(), transaction.getReturnDate()));
-        Long daysBetweenNewTransaction = (ChronoUnit.DAYS.between(transactionRequest.getStartDate(), transactionRequest.getReturnDate()));
-        User user = userRepository.findById(transaction.getUser().getId())
-                .orElseThrow(() -> new UserNotFoundException("User not found - UpdateTransaction"));
-        if((user.getBalance().add(transaction.getTotalPrice())).compareTo(rentalCar.getDailyRentingPrice().multiply(BigDecimal.valueOf(daysBetweenNewTransaction))) != 1) {
-            throw new BalanceIsNotEnoughException("Not enough balance");
-        }
-        if(daysBetweenOldTransaction > daysBetweenNewTransaction){
-            user.setBalance(user.getBalance().add(rentalCar.getDailyRentingPrice().multiply(BigDecimal.valueOf(daysBetweenOldTransaction - daysBetweenNewTransaction))));
-        }else{
-            user.setBalance(user.getBalance().subtract(rentalCar.getDailyRentingPrice().multiply(BigDecimal.valueOf(daysBetweenOldTransaction - daysBetweenNewTransaction))));
-        }
-        transaction.setRentalCar(rentalCarRepository.findById(transactionRequest.getRentalCarId())
-                .orElseThrow(() -> new CarNotFoundException("Rental car not found - UpdateTransaction")));
-        transaction.setUser(userRepository.findById(transactionRequest.getUserId())
-                .orElseThrow(() -> new UserNotFoundException("User not found - UpdateTransaction")));
-        transaction.setStartDate(transactionRequest.getStartDate());
-        transaction.setReturnDate(transactionRequest.getReturnDate());
-        transaction.setStatus(transactionRequest.getStatus());
-        transaction.setTotalPrice(BigDecimal.valueOf(daysBetweenNewTransaction).multiply(transaction.getRentalCar().getDailyRentingPrice()));
-        userRepository.save(user);
-    }
 
-    // Delete a transaction
     public String deleteTransaction(UUID id) {
-        try {
+        Transaction transaction = findTransactionById(id);
+        User user = findUser(transaction.getUser().getId());
 
-            Transaction transaction = transactionRepository.findById(id)
-                    .orElseThrow(() -> new TransactionNotFoundException("Transaction not found"));
-            User user = userRepository.findById(transaction.getUser().getId())
-                    .orElseThrow(() -> new UserNotFoundException("User not found - DeleteTransaction"));
-            if(LocalDate.now().isAfter(transaction.getStartDate())){
-               throw new TransactionIsAlreadyStartedException("Transaction is already started.Please update your transaction instead of deleting it.");
-            }
-            user.setBalance(user.getBalance().add(transaction.getTotalPrice()));
-            transactionRepository.deleteById(id);
-            return "Transaction deleted";
-        } catch (Exception e) {
-            throw new TransactionNotFoundException("Transaction not found");
+        if (LocalDate.now().isAfter(transaction.getStartDate())) {
+            throw new TransactionIsAlreadyStartedException("Transaction has already started. Please update it instead.");
         }
+
+        user.setBalance(user.getBalance().add(transaction.getTotalPrice()));
+        transactionRepository.deleteById(id);
+
+        return "Transaction deleted";
     }
 
     public List<TransactionResponse> getTransactionsByUserId(UUID userId) {
-        return transactionRepository.findByUserId(userId).stream()
-                .map(transactionMapper::toTransactionResponse)
-                .collect(Collectors.toList());
-    }
-
-    public List<TransactionResponse> getTransactionsByCarId(UUID carId) {
-        return transactionRepository.findByRentalCarId(carId).stream()
-                .map(transactionMapper::toTransactionResponse)
-                .collect(Collectors.toList());
-    }
-
-    public List<TransactionResponse> getTransactionsByUserIdAndCarId(UUID userId, UUID carId) {
-        return transactionRepository.findByUserIdAndRentalCarId(userId, carId).stream()
+        return transactionRepository.findByUserId(userId)
+                .stream()
                 .map(transactionMapper::toTransactionResponse)
                 .collect(Collectors.toList());
     }
 
     public List<TransactionResponse> getActiveTransactions() {
-        return transactionRepository.findByStatus(Status.ACTIVE).stream()
+        return transactionRepository.findByStatus(Status.ACTIVE)
+                .stream()
                 .map(transactionMapper::toTransactionResponse)
                 .collect(Collectors.toList());
     }
 
     public String returnCar(UUID id) {
-        Transaction transaction = transactionRepository.findById(id)
-                .orElseThrow(() -> new TransactionNotFoundException("Transaction not found"));
-        if(transaction.getStatus().equals(Status.ACTIVE)){
-            transaction.setStatus(Status.DONE);
-            transaction.setIsReturned(true);
-            transactionRepository.save(transaction);
-            return "Car returned with id: " + id + " successfully";
-        }else{
+        Transaction transaction = findTransactionById(id);
+
+        if (transaction.getStatus() != Status.ACTIVE) {
             throw new CarIsNotRentedException("Car is not rented");
         }
+
+        transaction.setStatus(Status.DONE);
+        transaction.setIsReturned(true);
+        transactionRepository.save(transaction);
+
+        return "Car returned with id: " + id + " successfully";
+    }
+
+    private void validateDates(LocalDate startDate, LocalDate returnDate) {
+        if (!startDate.isBefore(returnDate)) {
+            throw new ReturnDateIsNotValidException("Return date must be after start date");
+        }
+    }
+
+    private RentalCar findAvailableRentalCar(UUID rentalCarId) {
+        return rentalCarRepository.findById(rentalCarId)
+                .filter(car -> car.getStatus().equals(CarStatus.AVAILABLE))
+                .orElseThrow(() -> new CarNotFoundException("Rental car not available"));
+    }
+
+    private User findUser(UUID userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+    }
+
+    private Transaction findTransactionById(UUID id) {
+        return transactionRepository.findById(id)
+                .orElseThrow(() -> new TransactionNotFoundException("Transaction not found"));
+    }
+
+    private boolean datesChanged(Transaction existingTransaction, TransactionRequest transactionRequest) {
+        return !existingTransaction.getStartDate().equals(transactionRequest.getStartDate()) ||
+                !existingTransaction.getReturnDate().equals(transactionRequest.getReturnDate());
+    }
+
+    private void checkCarAvailability(TransactionRequest transactionRequest, RentalCar rentalCar) {
+        if (transactionRepository.isCarRented(transactionRequest.getRentalCarId(), transactionRequest.getStartDate(), transactionRequest.getReturnDate(), Status.ACTIVE)) {
+            throw new CarIsAlreadyRentedException("Car is already rented for this date range");
+        }
+    }
+
+    private void updateTransactionDetails(Transaction transaction, TransactionRequest transactionRequest, RentalCar rentalCar) {
+        long daysBetweenOld = ChronoUnit.DAYS.between(transaction.getStartDate(), transaction.getReturnDate());
+        long daysBetweenNew = ChronoUnit.DAYS.between(transactionRequest.getStartDate(), transactionRequest.getReturnDate());
+        User user = findUser(transaction.getUser().getId());
+
+        BigDecimal rentalPriceDifference = rentalCar.getDailyRentingPrice().multiply(BigDecimal.valueOf(daysBetweenOld - daysBetweenNew));
+
+        if (daysBetweenOld > daysBetweenNew) {
+            user.setBalance(user.getBalance().add(rentalPriceDifference));
+        } else if (user.getBalance().compareTo(rentalPriceDifference.negate()) < 0) {
+            throw new BalanceIsNotEnoughException("Not enough balance");
+        } else {
+            user.setBalance(user.getBalance().subtract(rentalPriceDifference.negate()));
+        }
+
+        transaction.setRentalCar(rentalCar);
+        transaction.setUser(user);
+        transaction.setStartDate(transactionRequest.getStartDate());
+        transaction.setReturnDate(transactionRequest.getReturnDate());
+        transaction.setStatus(transactionRequest.getStatus());
+        transaction.setTotalPrice(BigDecimal.valueOf(daysBetweenNew).multiply(rentalCar.getDailyRentingPrice()));
+
+        userRepository.save(user);
     }
 }
