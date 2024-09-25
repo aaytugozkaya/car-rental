@@ -13,6 +13,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -51,18 +52,41 @@ public class RentalCarService {
     }
 
     public RentalCarResponse saveRentalCar(RentalCarRequest rentalCarRequest) {
-        return RentalCarMapper.toRentalCarResponse(rentalCarRepository.save(RentalCarMapper.toRentalCar(rentalCarRequest)));
+        try {
+            return RentalCarMapper.toRentalCarResponse(rentalCarRepository.save(RentalCarMapper.toRentalCar(rentalCarRequest)));
+        } catch (DataIntegrityViolationException ex) {
+            throw new IllegalArgumentException("Car with the same plate already exists.");
+        }
+
     }
 
     public RentalCarResponse updateRentalCar(UUID id, RentalCarRequest rentalCarRequest) {
-        RentalCar rentalCar = rentalCarRepository.findById(id).orElseThrow(() -> new CarNotFoundException("Car not found"));
-        rentalCar.setBrand(rentalCarRequest.getBrand() == null ? rentalCar.getBrand() : rentalCarRequest.getBrand());
-        rentalCar.setModel(rentalCarRequest.getModel() == null ? rentalCar.getModel() : rentalCarRequest.getModel());
-        rentalCar.setYear(rentalCarRequest.getYear() == null ? rentalCar.getYear() : rentalCarRequest.getYear());
-        rentalCar.setDailyRentingPrice(rentalCarRequest.getDailyRentingPrice() == null ? rentalCar.getDailyRentingPrice() : rentalCarRequest.getDailyRentingPrice());
-        rentalCar.setDeposit(rentalCarRequest.getDeposit() == null ? rentalCar.getDeposit() : rentalCarRequest.getDeposit());
+        RentalCar rentalCar = rentalCarRepository.findById(id)
+                .orElseThrow(() -> new CarNotFoundException("Car not found"));
+
+        rentalCar.setBrand(rentalCarRequest.getBrand() != null ? rentalCarRequest.getBrand() : rentalCar.getBrand());
+        rentalCar.setModel(rentalCarRequest.getModel() != null ? rentalCarRequest.getModel() : rentalCar.getModel());
+        rentalCar.setYear(rentalCarRequest.getYear() != null ? rentalCarRequest.getYear() : rentalCar.getYear());
+        rentalCar.setColor(rentalCarRequest.getColor() != null ? rentalCarRequest.getColor() : rentalCar.getColor());
+        rentalCar.setPlate(rentalCarRequest.getPlate() != null ? rentalCarRequest.getPlate() : rentalCar.getPlate());
+        rentalCar.setType(rentalCarRequest.getType() != null ? rentalCarRequest.getType() : rentalCar.getType());
+        rentalCar.setFuelType(rentalCarRequest.getFuelType() != null ? rentalCarRequest.getFuelType() : rentalCar.getFuelType());
+        rentalCar.setGearType(rentalCarRequest.getGearType() != null ? rentalCarRequest.getGearType() : rentalCar.getGearType());
+        rentalCar.setKm(rentalCarRequest.getKm() != null ? rentalCarRequest.getKm() : rentalCar.getKm());
+        rentalCar.setSeatCount(rentalCarRequest.getSeatCount() != null ? rentalCarRequest.getSeatCount() : rentalCar.getSeatCount());
+        rentalCar.setDoorCount(rentalCarRequest.getDoorCount() != null ? rentalCarRequest.getDoorCount() : rentalCar.getDoorCount());
+        rentalCar.setAirCondition(rentalCarRequest.getAirCondition() != null ? rentalCarRequest.getAirCondition() : rentalCar.getAirCondition());
+        rentalCar.setDailyRentingPrice(rentalCarRequest.getDailyRentingPrice() != null ? rentalCarRequest.getDailyRentingPrice() : rentalCar.getDailyRentingPrice());
+        rentalCar.setStatus(rentalCarRequest.getStatus() != null ? rentalCarRequest.getStatus() : rentalCar.getStatus());
+        rentalCar.setDescription(rentalCarRequest.getDescription() != null ? rentalCarRequest.getDescription() : rentalCar.getDescription());
+        rentalCar.setLocation(rentalCarRequest.getLocation() != null ? rentalCarRequest.getLocation() : rentalCar.getLocation());
+        rentalCar.setDeposit(rentalCarRequest.getDeposit() != null ? rentalCarRequest.getDeposit() : rentalCar.getDeposit());
+        rentalCar.setMinDriverLicenseYear(rentalCarRequest.getMinDriverLicenseYear() != null ? rentalCarRequest.getMinDriverLicenseYear() : rentalCar.getMinDriverLicenseYear());
+        rentalCar.setDiscountRate(rentalCarRequest.getDiscountRate() != null ? rentalCarRequest.getDiscountRate() : rentalCar.getDiscountRate());
+
         return RentalCarMapper.toRentalCarResponse(rentalCarRepository.save(rentalCar));
     }
+
 
     public String deleteRentalCar(UUID id) {
         try {
@@ -93,10 +117,8 @@ public class RentalCarService {
         return photoUrl;
     }
 
-    private final Function<String, String> fileExtension = fileName -> Optional.of(fileName)
-            .filter(f -> f.contains("."))
-            .map(f -> f.substring(fileName.lastIndexOf(".") + 1))
-            .orElseThrow(() -> new IllegalArgumentException("File has no extension"));
+    private final Function<String, String> fileExtension = filename -> Optional.of(filename).filter(name -> name.contains("."))
+            .map(name -> "." + name.substring(filename.lastIndexOf(".") + 1)).orElse(".png");
 
     private final BiFunction<UUID, MultipartFile, String> photoFunction = (id, image) -> {
         String fileName = id + fileExtension.apply(image.getOriginalFilename());
@@ -107,7 +129,7 @@ public class RentalCarService {
             }
             Files.copy(image.getInputStream(), fileStorageLocation.resolve(fileName), REPLACE_EXISTING);
             return ServletUriComponentsBuilder.fromCurrentContextPath()
-                    .path("/rentalCars/image" + fileName)
+                    .path("api/v1/rental/image/" + fileName)
                     .toUriString();
         } catch (Exception e) {
             throw new RuntimeException("Error while uploading photo");

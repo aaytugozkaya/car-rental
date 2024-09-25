@@ -34,9 +34,9 @@ public class User implements UserDetails {
     private String password;
     private String mobilePhone;
     private String driverLicenseNumber;
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd/MM/yyyy")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate birthDate;
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd/MM/yyyy")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate driverLicenseDate;
     @Enumerated(EnumType.STRING)
     private Role role;

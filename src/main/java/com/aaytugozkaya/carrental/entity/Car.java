@@ -1,9 +1,7 @@
 package com.aaytugozkaya.carrental.entity;
 
 import com.aaytugozkaya.carrental.entity.enums.*;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.MappedSuperclass;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -20,6 +18,7 @@ public class Car {
     private Model model;
     private String year;
     private String color;
+    @Column(unique = true, nullable = false)
     private String plate;
     @Enumerated(EnumType.STRING)
     private CarType type;

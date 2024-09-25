@@ -31,4 +31,9 @@ public class SupportService {
     public SupportResponse updateSupport(UUID id, SupportResponse updatedSupport) {
         return SupportMapper.toSupportResponse(supportRepository.save(SupportMapper.toSupport(updatedSupport)));
     }
+
+    public String deleteSupport(UUID id) {
+        supportRepository.deleteById(id);
+        return "Support with id: " + id + " deleted successfully";
+    }
 }

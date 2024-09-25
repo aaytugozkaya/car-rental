@@ -1,6 +1,7 @@
 package com.aaytugozkaya.carrental.dto.request;
 
 import com.aaytugozkaya.carrental.entity.enums.CarLocation;
+import com.aaytugozkaya.carrental.entity.enums.Status;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -15,9 +16,7 @@ import java.util.UUID;
 public class TransactionRequest {
     private UUID userId;
     private UUID rentalCarId;
-    private LocalDate transactionDate;
-    private LocalDate borrowingDate;
+    private LocalDate startDate;
     private LocalDate returnDate;
-    private CarLocation location;
-    private BigDecimal totalPrice;
+    private Status status;
 }

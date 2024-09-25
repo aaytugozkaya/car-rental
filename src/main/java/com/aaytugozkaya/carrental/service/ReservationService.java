@@ -90,4 +90,11 @@ public class ReservationService {
     public Boolean isCarAvailable(UUID rentalCarId , LocalDate startDate, LocalDate returnDate) {
         return reservationRepository.isCarReserved(rentalCarId,startDate,returnDate);
     }
+
+    public String cancelReservation(UUID id) {
+        Reservation reservation = reservationRepository.findById(id).orElseThrow(() -> new ReservationNotFoundException("Reservation not found"));
+        reservation.setStatus(Status.CANCELLED);
+        reservationRepository.save(reservation);
+        return "Reservation with id " + id + " cancelled successfully";
+    }
 }

@@ -37,6 +37,7 @@ public class SecurityConfiguration {
             BASE_URL + "/rental/allCars",
             BASE_URL + "/rental/{id}",
             BASE_URL + "/rental/search",
+            BASE_URL + "/rental/image/**",
             BASE_URL + "/enum/**",
            };
 

@@ -6,6 +6,7 @@ import com.aaytugozkaya.carrental.entity.RentalCar;
 import com.aaytugozkaya.carrental.entity.Reservation;
 import com.aaytugozkaya.carrental.entity.User;
 import com.aaytugozkaya.carrental.repository.RentalCarRepository;
+import com.aaytugozkaya.carrental.repository.TokenRepository;
 import com.aaytugozkaya.carrental.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
 public class ReservationMapper {
     private final RentalCarRepository rentalCarRepository;
     private final UserRepository userRepository;
+    private final TokenRepository tokenRepository;
     private final RentalCarMapper rentalCarMapper;
 
     public Reservation toReservation(ReservationRequest request){

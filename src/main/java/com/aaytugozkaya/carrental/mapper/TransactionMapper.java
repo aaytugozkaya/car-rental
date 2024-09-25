@@ -9,11 +9,14 @@ import com.aaytugozkaya.carrental.repository.RentalCarRepository;
 import com.aaytugozkaya.carrental.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cglib.core.Local;
 import org.springframework.stereotype.Component;
 
 @RequiredArgsConstructor
@@ -32,26 +35,30 @@ public class TransactionMapper {
         return Transaction.builder()
                 .user(user)
                 .rentalCar(rentalCar)
-                .transactionDate(request.getTransactionDate())
-                .borrowingDate(LocalDate.now().plusDays(1))
+                .transactionDate(LocalDate.now())
+                .startDate(request.getStartDate())
                 .returnDate(request.getReturnDate())
-                .location(request.getLocation())
-                .totalPrice(request.getTotalPrice())
+                .location(rentalCar.getLocation())
+                .totalPrice( BigDecimal.valueOf(ChronoUnit.DAYS.between(request.getStartDate(), request.getReturnDate())).multiply(rentalCar.getDailyRentingPrice()))
                 .isReturned(false)
+                .plateNumber(rentalCar.getPlate())
+                .status(request.getStatus())
                 .build();
     }
 
     public TransactionResponse toTransactionResponse(Transaction transaction) {
         return TransactionResponse.builder()
                 .id(transaction.getId())
-                .user(transaction.getUser())
-                .rentalCar(transaction.getRentalCar())
+                .userId(transaction.getUser().getId())
+                .rentalCarId(transaction.getRentalCar().getId())
                 .transactionDate(transaction.getTransactionDate())
-                .borrowingDate(transaction.getBorrowingDate())
+                .startDate(transaction.getStartDate())
                 .returnDate(transaction.getReturnDate())
                 .location(transaction.getLocation())
                 .totalPrice(transaction.getTotalPrice())
                 .isReturned(transaction.getIsReturned())
+                .status(transaction.getStatus())
+                .plateNumber(transaction.getPlateNumber())
                 .build();
     }
 }

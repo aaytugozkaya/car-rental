@@ -41,12 +41,12 @@ public class RegisterRequest {
 
         @NotNull(message = "Birth date is required")
         @Past(message = "Birth date must be a past date")
-        @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd/MM/yyyy")
+        @JsonFormat(shape = JsonFormat.Shape.STRING, pattern ="yyyy-MM-dd")
         private LocalDate birthDate;
 
         @NotNull(message = "Driver license date is required")
         @Past(message = "Driver license date must be a past date")
-        @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd/MM/yyyy")
+        @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
         private LocalDate driverLicenseDate;
 
 }

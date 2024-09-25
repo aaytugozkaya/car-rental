@@ -1,6 +1,7 @@
 package com.aaytugozkaya.carrental.repository;
 
 import com.aaytugozkaya.carrental.entity.Token;
+import com.aaytugozkaya.carrental.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -13,4 +14,7 @@ public interface TokenRepository extends JpaRepository<Token, Integer> {
     List<Token> findAllValidTokensByUser(UUID userId);
 
     Optional<Token> findByToken(String token);
+
+    @Query("SELECT t.user FROM Token t WHERE t.token = :token ")
+    Optional<User> findUserIdByToken(String token);
 }
